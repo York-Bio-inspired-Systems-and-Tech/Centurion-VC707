@@ -1,0 +1,9 @@
+ADDRESS_MAP centurion_node MICROBLAZE-LE 100
+        ADDRESS_SPACE centurion_node_lmb_bram MEMORY [0x00000000:0x00007fff]
+       
+            BUS_BLOCK
+	   ramb36e1 [31:00] INPUT = centurion_node_lmb_bram_0.mem;
+            END_BUS_BLOCK;
+
+        END_ADDRESS_SPACE;
+END_ADDRESS_MAP;

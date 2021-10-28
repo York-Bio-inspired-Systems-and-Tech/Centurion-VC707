@@ -1,0 +1,17 @@
+### Driver installation instructions for Centurion VC707 on Centos 7
+
+module is built as centurion_pci_driver.ko
+
+0. Build the driver by running "make"
+1. Copy the centurion.conf file to /etc/modules-load.d/centurion.conf
+2. Copy the centurion.ko file to /lib/modules/<KERNEL VERSION>/kernel/drivers/pci/pcie/centurion.ko
+3. Run depmod to rebuild modules dependencies
+4. Copy the 99-centurion-rules.rules file to /etc/udev/rules.d/99-centurion_rules.rules
+5. Reboot the machine.
+6. Run lspci -vvv, check the following values for the "Xilinx Corporation Device 7018" card:
+        Kernel driver in use: centurion_PCI
+        Kernel modules: centurion
+7. Check for centurion directory in /sys/class/many_core/
+8. Check for centurion file in /dev/centurion and that it belongs to group "wheel" (or other suitable group to allow non-admin use)
+
+

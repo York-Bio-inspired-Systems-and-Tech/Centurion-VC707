@@ -1,0 +1,98 @@
+START:
+;check input from PC and enter bootloader if needs be
+	INPUT sD, 80
+	COMPARE sD, F5
+	JUMP Z, BOOTLOADER
+	
+
+;reset and turn on the nodes
+;;put node into reset
+
+    OUTPUTK 1, 0
+    ;;set the clock output speed to 150MHz (6 bits)
+    OUTPUTK 0, 2
+
+    ;;Enable the clock 
+    OUTPUTK 1, 1
+
+    ;;wait some cycles for reset to propagate. If resetting under a slow clock frequency then this time may need to be increased
+    LOAD s0, 50
+RESET_NODE:
+    SUB s0, 01
+    JUMP NZ, RESET_NODE
+
+      ;;Take the node out of reset
+    OUTPUTK 0, 0
+
+
+;enable the PC interrupt
+	OUTPUTK 08, 4
+
+ENABLE INTERRUPT
+
+load s1, AB
+LOAD s0, 0
+loop:
+    OUTPUT s0, 80
+    ADD s0, 10
+    JUMP loop
+    
+
+ADDRESS 370
+BOOTLOADER:
+	CALL REMOTE_WRITE
+;check for bootloader EOP
+	COMPARE sD, FF
+	JUMP NZ, BOOTLOADER
+	JUMP START
+
+REMOTE_WRITE: 
+RW_SPINLOCK_0:
+	;wait for valid flag to raise
+	INPUT sC, 81
+	TEST sC, 01
+	JUMP Z, RW_SPINLOCK_0
+
+;read input address from PC
+	INPUT sD, 80
+
+;ack to PC	
+	OUTPUT sC, 81
+	
+RW_SPINLOCK_1:
+	;wait for valid flag to drop
+	INPUT sC, 81
+	TEST sC, 01
+	JUMP NZ, RW_SPINLOCK_1
+	
+;read input data from PC
+	INPUT sE, 80
+	
+;ack to PC	
+	OUTPUT sC, 81	
+;write data to address
+	OUTPUT sE, (sD)
+	RETURN
+	
+ADDRESS 380
+ISR:
+    INPUT sF, 05
+
+ OUTPUT sF, 80
+add s1, 1
+
+ISR_CHECK_PC:
+    TEST sF, 08   
+    JUMP Z, ISR_CHECK_PB_TICK
+    CALL REMOTE_WRITE
+
+ISR_CHECK_PB_TICK:
+    TEST sF, 10   
+    JUMP Z, ISR_DONE
+    ADD s0, 1    
+    
+ISR_DONE:
+    RETURNI ENABLE
+	
+	
+	

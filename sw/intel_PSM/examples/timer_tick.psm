@@ -1,0 +1,80 @@
+LOAD s0, 1
+
+
+    ;;put node into reset
+    LOAD s0, 1
+    OUTPUT s0, 10
+
+    ;;set the clock output speed to 150MHz (6 bits)
+    LOAD s5, 0
+    OUTPUT s5, 12
+
+    ;;Enable the clock 
+    LOAD s0, 1
+    OUTPUT s0, 11
+
+    ;;wait some cycles for reset to propagate. If resetting under a slow clock frequency then this time may need to be increased
+    LOAD s0, 50
+RESET_NODE:
+    SUB s0, 01
+    JUMP NZ, RESET_NODE
+    
+    ;;Take the node out of reset
+    LOAD s0, 0
+    OUTPUT s0, 10
+    
+    
+    ;;read the node ID reg
+    INPUT s0, 00
+    ;;Write node ID to intel 
+    OUTPUT s0, 71
+    
+    ;load counter prescaler
+    ;@100MHz, 99 is 1us (count includes 0)
+    LOAD s0, 99'd
+    OUTPUT s0, 96
+    
+    
+    ;setup picoblaze intel timer
+    LOAD s0, 10
+    OUTPUT s0, 90
+    LOAD s0, 1
+    OUTPUT s0, 91
+    
+    ;enable picoblaze intel timer
+    LOAD s0, 1
+    OUTPUT s0, 92    
+    
+    ;enable the picoblaze timer interrupt
+    OUTPUTK 10, 01
+    
+    ;setup microblaze node timer
+    LOAD s0, 5
+    OUTPUT s0, 93
+    LOAD s0, 0
+    OUTPUT s0, 94
+    
+    ;enable microblaze node timer
+    LOAD s0, 1
+    OUTPUT s0, 95
+    
+
+
+ENABLE INTERRUPT
+
+
+LOAD s0, 0
+loop:
+    OUTPUT s0, 80
+    JUMP loop
+    
+    
+ADDRESS 384
+ISR:
+    INPUT sF, 02
+    COMPARE sF, 10
+    JUMP NZ, ISR_DONE
+    ADD s0, 1    
+    
+ISR_DONE:
+    RETURNI ENABLE

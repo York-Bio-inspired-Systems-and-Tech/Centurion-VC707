@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+	<name>centurion_PC_base_project</name>
+	<comment></comment>
+	<projects>
+	</projects>
+	<buildSpec>
+		<buildCommand>
+			<name>org.eclipse.cdt.managedbuilder.core.genmakebuilder</name>
+			<triggers>clean,full,incremental,</triggers>
+			<arguments>
+			</arguments>
+		</buildCommand>
+		<buildCommand>
+			<name>org.eclipse.cdt.managedbuilder.core.ScannerConfigBuilder</name>
+			<triggers>full,incremental,</triggers>
+			<arguments>
+			</arguments>
+		</buildCommand>
+	</buildSpec>
+	<natures>
+		<nature>org.eclipse.cdt.core.cnature</nature>
+		<nature>org.eclipse.cdt.managedbuilder.core.managedBuildNature</nature>
+		<nature>org.eclipse.cdt.managedbuilder.core.ScannerConfigNature</nature>
+	</natures>
+	<linkedResources>
+		<link>
+			<name>centurion_lib.c</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/centurion_lib/src/centurion_lib.c</locationURI>
+		</link>
+		<link>
+			<name>centurion_lib.h</name>
+			<type>1</type>
+			<locationURI>PARENT-1-PROJECT_LOC/centurion_lib/src/centurion_lib.h</locationURI>
+		</link>
+	</linkedResources>
+</projectDescription>

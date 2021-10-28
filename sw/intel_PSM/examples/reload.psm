@@ -1,0 +1,74 @@
+START:
+;check input from PC and enter bootloader if needs be
+	INPUT sD, 80
+	COMPARE sD, F5
+	JUMP Z, BOOTLOADER
+    
+
+
+ENABLE INTERRUPT
+
+
+LOAD s0, 0
+loop:
+    OUTPUT s0, 80
+	ADD s0, 10
+    JUMP loop
+    
+
+ADDRESS 370
+BOOTLOADER:
+	CALL REMOTE_WRITE
+;check for bootloader EOP
+	COMPARE sD, FF
+	JUMP NZ, BOOTLOADER
+	JUMP START
+
+
+
+REMOTE_WRITE: 
+RW_SPINLOCK_0:
+	;wait for valid flag to raise
+	INPUT sC, 81
+	TEST sC, 01
+	JUMP Z, RW_SPINLOCK_0
+	
+;read input address from PC
+	INPUT sD, 80
+
+;ack to PC	
+	OUTPUT sC, 81
+	
+RW_SPINLOCK_1:
+	;wait for valid flag to drop
+	INPUT sC, 81
+	TEST sC, 01
+	JUMP NZ, RW_SPINLOCK_1
+	
+;read input data from PC
+	INPUT sE, 80
+	
+;ack to PC	
+	OUTPUT sC, 81	
+;write data to address
+	OUTPUT sE, (sD)
+	RETURN
+	
+ADDRESS 380
+ISR:
+    INPUT sF, 02
+    COMPARE sF, 10
+    JUMP NZ, ISR_DONE
+    ADD s0, 1    
+    
+ISR_DONE:
+    RETURNI ENABLE
+	
+	
+
+	
+	
+	
+
+	
+	

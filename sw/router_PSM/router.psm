@@ -1,0 +1,557 @@
+CONSTANT O_ROUTING_DIRS_SINK_N, 10
+CONSTANT O_ROUTING_DIRS_SINK_E, 11
+CONSTANT O_ROUTING_DIRS_SINK_S, 12
+CONSTANT O_ROUTING_DIRS_SINK_W, 13
+CONSTANT O_ROUTING_DIRS_SINK_I, 14
+CONSTANT O_ROUTING_DIRS_SINK_RCAP, 15
+
+CONSTANT O_ROUTING_DIRS_SRC_N, 20
+CONSTANT O_ROUTING_DIRS_SRC_E, 21
+CONSTANT O_ROUTING_DIRS_SRC_S, 22
+CONSTANT O_ROUTING_DIRS_SRC_W, 23
+CONSTANT O_ROUTING_DIRS_SRC_I, 24
+CONSTANT O_ROUTING_DIRS_SRC_RCAP, 25
+
+CONSTANT O_HEADER_DELETE, 30
+CONSTANT O_CHANNEL_SETUP_ACK, 31
+CONSTANT O_CHANNEL_TIMEOUT_RESET, 32
+
+CONSTANT O_INTEL_REQ, 04
+CONSTANT O_INTEL_DATA_L, 40
+CONSTANT O_INTEL_DATA_H, 41
+
+CONSTANT O_NODE_RD_REQ, 05
+CONSTANT O_NODE_DATA_L, 50
+CONSTANT O_NODE_DATA_H, 51
+
+CONSTANT O_RCAP_RD_EN, 00
+CONSTANT O_NODE_RESET, 01
+CONSTANT O_NODE_CLK_EN, 02
+
+CONSTANT O_NODE_DIV_VALUE, 60
+
+CONSTANT O_NOC_DEBUG_DATA, 80
+CONSTANT O_NOC_DEBUG_STATUS, 81
+
+CONSTANT I_CHANNEL_SOPS, 10
+CONSTANT I_CHANNEL_EOPS, 11
+CONSTANT I_INPUT_TIMEOUTS, 12
+CONSTANT I_NODE_DATA_WR_REQ, 13
+
+
+CONSTANT I_DATA_N, 20
+CONSTANT I_DATA_E, 21
+CONSTANT I_DATA_S, 22
+CONSTANT I_DATA_W, 23
+CONSTANT I_DATA_I, 24
+CONSTANT I_DATA_CNTRL_BITS, 25
+
+CONSTANT I_PACKET_ID_L, 30
+CONSTANT I_PACKET_ID_H, 31
+
+CONSTANT I_NODE_DATA_IN, 50
+
+CONSTANT I_RCAP_DATA_VALID, 60
+CONSTANT I_RCAP_DATA, 61
+
+CONSTANT I_INTERRUPT_STATUS, 05
+CONSTANT I_NOC_DEBUG_DATA, 80
+CONSTANT I_NOC_DEBUG_STATUS, 81
+
+CONSTANT ROUTING_DIR_MASK, 0F
+
+NAMEREG s5, node_settings
+NAMEREG s6, current_port
+NAMEREG s7, current_port_bit
+NAMEREG s8, packet_header
+NAMEREG s9, port_status
+NAMEREG sA, port_output_status
+
+CONSTANT OUTPUT_DIR_OFFSETS, 16'd
+CONSTANT DEADLOCK_STATUS_BASE, 21'd
+CONSTANT PACKET_ID_L_BASE, 32'd
+CONSTANT PACKET_ID_H_BASE, 40'd
+
+CONSTANT ROUTING_TABLE_BASE, 48'd
+
+START:
+;check input from PC and enter bootloader if needs be
+	INPUT sD, 80
+	COMPARE sD, F5
+	JUMP Z, BOOTLOADER
+    
+;enable all the interrupts
+	  OUTPUTK 07, 9
+	
+ENABLE INTERRUPT
+
+;;write the int -> bit flag lookup to scratchpad
+LOAD s0, 01
+STORE s0,00
+LOAD s0, 02
+STORE s0,01
+LOAD s0, 04
+STORE s0,02
+LOAD s0, 08
+STORE s0,03
+LOAD s0, 10
+STORE s0,04
+LOAD s0, 20
+STORE s0,05
+
+;;clear the output port settings
+LOAD s0, 06
+STORE s0,16'd
+STORE s0,17'd
+STORE s0,18'd
+STORE s0,19'd
+STORE s0,20'd
+
+;;clear the deadlock status
+LOAD s0, 00
+STORE s0,21'd
+STORE s0,22'd
+STORE s0,23'd
+STORE s0,24'd
+STORE s0,25'd
+
+
+LOAD node_settings, 00
+LOAD port_status, 00
+LOAD port_output_status, 00
+
+
+
+;;OPTIONAL: wait for node to wake up
+node_wait:
+	INPUT s0, I_NODE_DATA_IN
+	COMPARE s0, 55
+	JUMP NZ, node_wait
+
+;;TEST
+	
+	
+;;END TEST
+
+
+loop_reset:
+	LOAD current_port, 00
+	LOAD current_port_bit, 01
+
+loop:
+SOP_check:
+	;check if port is curently busy
+	TEST current_port_bit,port_status
+	JUMP NZ, EOP_check
+	
+	;check current port with SOP flag
+	INPUT s0, I_CHANNEL_SOPS
+	TEST current_port_bit, s0
+	CALL NZ, route_packet
+	
+loop_inc:
+	ADD current_port, 01
+	SL0 current_port_bit
+	TEST current_port_bit, 20
+	JUMP Z, loop
+	JUMP loop_reset	
+	
+	
+	
+	
+	
+	
+route_packet:		
+SOP_setup:
+	;load packet header
+	LOAD s0, I_DATA_N
+	ADD s0, current_port 
+	INPUT packet_header, (s0)
+	;check if sys packet or task packet
+	TEST packet_header, 40
+	JUMP Z, routing_table_lookup
+	
+SYS_packet_dir_extract:
+	;extract the routing dir	
+	AND packet_header, ROUTING_DIR_MASK
+	
+SYS_packet_out_channel_req:	
+	;;check if requested port is busy
+	;convert to bit field
+	FETCH s0, (packet_header)
+	TEST s0, port_output_status
+	RETURN NZ
+	
+	;header delete as sys packet
+	OUTPUT s0, O_HEADER_DELETE	
+
+	 
+channel_setup:	
+	;claim the output port and set up the connections
+	OR port_output_status, s0
+	OR port_status, current_port_bit
+	
+	;set ouput source
+	LOAD s1, O_ROUTING_DIRS_SRC_N
+	ADD s1, current_port
+	OUTPUT packet_header, (s1)
+	
+	;store output setting internally
+	LOAD s1, OUTPUT_DIR_OFFSETS
+	ADD s1, current_port
+	STORE packet_header, (s1)
+	
+	;prepare output sink
+	LOAD s1, O_ROUTING_DIRS_SINK_N
+	ADD s1, packet_header
+	;ack the channel fsm
+	OUTPUT port_status, O_CHANNEL_SETUP_ACK
+	;set output sink
+	OUTPUT current_port, (s1)
+
+	
+	;clear header delete flag
+	LOAD s0, 00
+	OUTPUT s0, O_HEADER_DELETE
+	
+	;store packet id
+	OUTPUT current_port, 33
+	;prepare output address whilst reg latency for packet ID is fulfilled
+	LOAD s0, PACKET_ID_L_BASE
+	ADD s0, packet_header
+	;store LSB
+	INPUT s2, 30
+	STORE s2, (s0)
+	;log the packet id via debug bus
+	OUTPUT s2, O_NODE_DATA_L
+	;store MSB
+	ADD s0, 08
+	INPUT s2, 31
+	STORE s2, (s0)
+	;log the packet id via debug bus
+	SL0 s2
+	SL0 s2
+	AND packet_header, 03
+	OR s2, packet_header
+	OUTPUT s2, O_NODE_DATA_H
+	
+	;log the packet id via the node interrupt
+	LOAD s0, 1
+	OUTPUT s0, O_NODE_RD_REQ
+	LOAD s0, 0
+	OUTPUT s0, O_NODE_RD_REQ
+	
+	;tell the intel we have routed a packet
+	LOAD sF, 01
+	OUTPUT sF, O_INTEL_REQ
+	LOAD sF, AA
+	OUTPUT sF, O_INTEL_DATA_L
+	LOAD sF, BB
+	OUTPUT sF, O_INTEL_DATA_H
+	LOAD sF, 00
+	OUTPUT sF, O_INTEL_REQ
+	OUTPUT sF, O_INTEL_DATA_L
+
+	RETURN
+
+
+	;set routing_dir with direction to select
+routing_table_lookup:
+	;extract the task into s0
+	LOAD s0, packet_header
+	AND s0, 0F
+	
+	;set internal as the default task
+	LOAD packet_header, 04
+	
+	
+	;check if the "sink all internal flag is set (0x80 in settings reg)
+	TEST node_settings, 80
+	JUMP NZ, packet_out_channel_check
+	;check task with node task and set to internal if match
+	LOAD s1, node_settings
+	AND s1, 0F
+	COMPARE s1, s0
+	;return to routing flow if task matches
+	JUMP Z, packet_out_channel_check
+	
+	;fetch the packet ID
+	
+	
+	;fetch the deadlock status of the input
+	LOAD s1, DEADLOCK_STATUS_BASE
+	ADD s1, current_port
+	FETCH s1, (s1)
+	
+	;check if we have full deadlock, if so route internally
+	COMPARE s1, 04
+	JUMP Z, packet_out_channel_check
+		
+	;fetch the routing dirs from scratchpad
+	LOAD s2, ROUTING_TABLE_BASE
+	ADD s2, s0
+	FETCH packet_header, (s2)
+	
+	;select option based on deadlock status, place in lsb
+	;fetch doesn't set the zero flag so test it to set it:
+	TEST s1, FF
+	JUMP Z, shift_loop_done
+	
+shift_loop:
+	SR0 packet_header
+	SR0 packet_header
+	SUB s1, 01
+	JUMP NZ, shift_loop
+	
+shift_loop_done:
+	AND packet_header, 03 ;chosen routing dir is last 2 bits 
+	
+packet_out_channel_check:
+	;;check if requested port is busy
+	;convert to bit field
+	FETCH s0, (packet_header)
+	TEST s0, port_output_status
+	JUMP Z, channel_setup
+
+	
+	;if port is busy check for deadlock
+	;get the current input port's packet ID
+	OUTPUT current_port, 33
+	;setup the output port address whilst ID reg latency is observed
+	LOAD s1, PACKET_ID_L_BASE
+	ADD s1, packet_header
+	;check LSB
+	INPUT s2, 30
+	FETCH s3, (s1)
+	COMPARE s3, s2
+	;no match - just quit the routing flow to wait for port to be ready
+	RETURN NZ
+	
+	;check MSB
+	INPUT s2, 31
+	ADD s1, 08
+	FETCH s3, (s1)
+	COMPARE s3, s2
+	;no match - just quit the routing flow to wait for port to be ready
+	RETURN NZ	
+	
+	;packet IDs match so deadlock has occured
+	;increment and store deadlock status
+	
+	LOAD s1, DEADLOCK_STATUS_BASE
+	ADD s1, current_port
+	FETCH s2, (s1)
+	ADD s2, 01
+	STORE s2, (s1)
+	;return to routing flow
+	RETURN
+
+
+
+
+	
+EOP_check:	
+	INPUT s0, I_CHANNEL_EOPS
+	TEST current_port_bit, s0
+	JUMP Z, loop_inc
+	;clear the busy status of the input port
+	XOR port_status, current_port_bit
+	
+	;fetch the output port setting
+	LOAD s1, OUTPUT_DIR_OFFSETS
+	ADD s1, current_port
+	FETCH s0, (s1)
+	
+	;clear output source to idle
+	LOAD s3, 07
+	LOAD s1, O_ROUTING_DIRS_SRC_N
+	ADD s1, current_port
+	OUTPUT s3, (s1)
+	
+	;clear output sink
+	LOAD s1, O_ROUTING_DIRS_SINK_N
+	ADD s1, s0
+	OUTPUT s3, (s1)
+	
+	;clear the output status
+	;convert to bit field
+	FETCH s1, (s0)
+	XOR port_output_status, s1
+	
+	;clear deadlock status
+	LOAD s0, 00
+	LOAD s1, DEADLOCK_STATUS_BASE
+	ADD s1, current_port 
+	STORE s0, s1
+	
+	;ack the channel fsm
+	OUTPUT port_status, O_CHANNEL_SETUP_ACK
+	
+	JUMP loop_inc
+	
+
+
+	
+	
+	
+	
+	
+	
+	
+	
+	
+ADDRESS 370
+BOOTLOADER:
+	CALL REMOTE_WRITE_IO
+;check for bootloader EOP
+	COMPARE sD, FF
+	JUMP NZ, BOOTLOADER
+	JUMP START
+
+
+
+REMOTE_WRITE_IO: 
+RW_SPINLOCK_0:
+	;wait for valid flag to raise
+	INPUT sC, 81
+	TEST sC, 01
+	JUMP Z, RW_SPINLOCK_0
+	
+;read input address from PC
+	INPUT sD, 80
+
+;ack to PC	
+	OUTPUT sC, 81
+	
+RW_SPINLOCK_1:
+	;wait for valid flag to drop
+	INPUT sC, 81
+	TEST sC, 01
+	JUMP NZ, RW_SPINLOCK_1
+	
+;read input data from PC
+	INPUT sE, 80
+	
+;ack to PC	
+	OUTPUT sC, 81	
+;write data to address
+	OUTPUT sE, (sD)
+	RETURN
+	
+ADDRESS 380
+ISR:
+REGBANK B
+    INPUT sF, I_INTERRUPT_STATUS
+
+ISR_CHECK_PC:
+    TEST sF, 04   
+    CALL NZ, PC_ISR
+	TEST sF, 02   
+    CALL NZ, MB_ISR
+
+ISR_DONE:
+	REGBANK A
+    RETURNI ENABLE
+	
+
+PC_ISR:
+	CALL READ_PC_WITH_ACK
+	LOAD s4, s0
+	COMPARE s4, 01
+	CALL Z, REMOTE_WRITE_IO
+	COMPARE s4, 02
+	CALL Z, REMOTE_WRITE_SPM
+	COMPARE s4, 03
+	CALL Z, REMOTE_WRITE_NODE_SETTINGS
+	RETURN
+	
+MB_ISR:
+	CALL READ_MB_WITH_ACK
+	LOAD s4, s0
+	COMPARE s4, 01
+	CALL Z, REMOTE_WRITE_IO
+	COMPARE s4, 02
+	CALL Z, REMOTE_WRITE_SPM_MB
+	COMPARE s4, 03
+	CALL Z, REMOTE_WRITE_NODE_SETTINGS_MB
+	RETURN
+	
+READ_PC_WITH_ACK:
+	;returns into s0
+RPWA_SPINLOCK_0:
+	;wait for valid flag to raise
+	INPUT sC, I_NOC_DEBUG_STATUS
+	TEST sC, 01
+	JUMP Z, RPWA_SPINLOCK_0
+	; read value from PC
+	INPUT s0, I_NOC_DEBUG_DATA
+	;ack to PC	
+	OUTPUT sC, O_NOC_DEBUG_STATUS
+RPWA_SPINLOCK_1:
+	;wait for valid flag to drop
+	INPUT sC, I_NOC_DEBUG_STATUS
+	TEST sC, 01
+	JUMP NZ, RPWA_SPINLOCK_1
+	OUTPUT sC, O_NOC_DEBUG_STATUS
+	RETURN
+
+READ_MB_WITH_ACK:
+	;returns into s0
+	
+	;output DE to indicate we are ready to read
+	LOAD s0, DE
+	OUTPUT s0, O_NODE_DATA_L
+	;wait for DE on node to indicate write
+RMBWA_SPINLOCK_0:
+	INPUT s0, I_NODE_DATA_IN
+	COMPARE s0, DE
+	JUMP NZ, RMBWA_SPINLOCK_0
+	
+
+	;wait 5 instructions for node to set value
+	;this value is only appliciable to when node + router
+	;are running at the same frequency, load and adjust as required.
+	;(probably with a loop based on divider setting)
+	
+	LOAD s0,s0	
+	LOAD s0,s0
+	LOAD s0,s0
+	
+	;ack by clearing output 
+	LOAD s0, 00
+	OUTPUT s0, O_NODE_DATA_L
+	;read the data
+	INPUT s0,  I_NODE_DATA_IN
+	RETURN
+
+	
+REMOTE_WRITE_SPM:
+	CALL READ_PC_WITH_ACK
+	LOAD s1, s0
+	CALL READ_PC_WITH_ACK
+	STORE s0, (s1)
+	RETURN
+	
+REMOTE_WRITE_NODE_SETTINGS:
+	CALL READ_PC_WITH_ACK
+	;node settings reg (s5) will be on the other register bank
+	STAR s5, s0
+	RETURN
+	
+REMOTE_WRITE_SPM_MB:
+	CALL READ_MB_WITH_ACK
+	LOAD s1, s0
+	CALL READ_MB_WITH_ACK
+	STORE s0, (s1)
+	RETURN	
+	
+REMOTE_WRITE_NODE_SETTINGS_MB:
+	CALL READ_MB_WITH_ACK
+	;node settings reg (s5) will be on the other register bank
+	STAR s5, s0
+	RETURN
+
+
+
+
+	
