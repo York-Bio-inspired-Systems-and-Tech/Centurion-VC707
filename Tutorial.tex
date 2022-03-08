@@ -1,0 +1,126 @@
+\documentclass{article}
+\usepackage[margin=0.7in]{geometry}
+\usepackage[parfill]{parskip}
+\usepackage[utf8]{inputenc}
+
+\begin{document}
+	
+	\section{Setting up the environment}
+	To develop with Centurion, you first need to clone the repository from GitHub, which requires setting up SSH keys.
+	\begin{enumerate}
+		\item First, connect to the development machine. E.g:
+			\begin{verbatim}
+			ssh <username>@elecpc306.its.york.ac.uk
+			\end{verbatim}
+			The VPN must be used to connect remotely, but it is not required when on campus.
+		\item Generate an SSH key by running
+			\begin{verbatim}
+			ssh-keygen -t ed25519 -C "your York email address"
+			\end{verbatim}
+		and accepting the default options.
+		\item \verb|cd| into \verb|~/.ssh| and create or edit \verb|config|. Assuming the key file is called \verb|id_ed25519|, add this to the file:
+			\begin{verbatim}
+			Host *
+			    AddKeysToAgent yes
+			    IdentityFile ~/.ssh/id_ed25519
+			\end{verbatim}
+		\item Run the following commands to add the new key to the SSH agent.
+			\begin{verbatim}
+			chmod 0600 ~/.ssh/config
+			eval "$(ssh-agent)"
+			ssh-add -k ~/.ssh/id_ed25519
+			\end{verbatim}
+		\item Next, copy the contents of \verb|id_ed25519.pub| and import it into your GitHub account. (Settings$\rightarrow$SSH and GPG keys)
+		\item You can now clone the repo. From the directory where you would like the project to exist, run
+			\begin{verbatim}
+			git clone git@github.com:York-Bio-inspired-Systems-and-Tech/Centurion-VC707.git
+			\end{verbatim}
+		\item Finally, move into the repo with \verb|cd Centurion-VC707|
+	\end{enumerate}
+
+	There are two sides to the software: the code running on the host, and that running on the nodes. Eclipse is used for developing the host PC software, while Xilinx Development environment (which is also based on Eclipse) is used for the nodes.
+	
+	To open Eclipse:
+	\begin{enumerate}
+		\item The SSH session must be setup with X-Forwarding, eg:
+			\begin{verbatim}
+			ssh <username>@elecpc306.its.york.ac.uk -X
+			\end{verbatim}
+		\item Open eclipse
+			\begin{verbatim}
+			eclipse &
+			\end{verbatim}
+		\item Eclipse will then ask for a workspace, which is where the host PC project will be stored. Choose \verb|$REPO_DIR/sw/host_pc/|
+		\item Eclipse integrates well with git, but the first time the workspace is opened it will need to be told where to find the projects. Go to "File $\rightarrow$ Import" and choose "General $\rightarrow$ Existing Projects into Workspace". Press "Next" and set the root directory to \verb|$REPO_DIR/sw/host_pc|
+		\item This should bring up a list of projects. For this tutorial we only need to import the \verb|centurion_lib| and \verb|centurion_example_Host_PC| project. Ensure that these projects are selected and click “Finish”.
+	\end{enumerate}
+
+	To open Xilinx Development environment:
+	\begin{enumerate}
+		\item Run \verb|source /opt/Xilinx/Vivado/2018.3/settings64.sh| so Bash knows where to find the tools. This needs to be run from every new shell.
+		Alternatively, add the command to \verb|~/.bash_profile| so it is run automatically on login.
+		\item Open the IDE
+			\begin{verbatim}
+			xsdk &
+			\end{verbatim}
+		\item As with Eclipse, you will be asked for a workspace. This time, choose \verb|$REPO_DIR/sw/node_sw|
+		\item Once again we have to tell Eclipse where to find the projects. Go to "File $\rightarrow$ Import" and choose "General $\rightarrow$ Existing Projects into Workspace". Press “Next” and set the root directory to \verb|$REPO_DIR/sw/node_sw/|.
+		\item This should bring up a list of projects. We need to import the HW description project \verb|centurion_node_hw|, the board support package \verb|standalone_bsp_0| and the example project \verb|centurion_example|. Ensure that these projects are selected and click “Finish”.
+		\item The project may be showing in an error state. This is because the BSP is not built when it comes out of the repo. Build the BSP project by selecting "Project $\rightarrow$ Build All".
+	\end{enumerate}
+
+	\section{Programming the Centurion machine}
+	The code for the nodes is compiled to an ELF file, which is then uploaded to the boards.
+	\begin{enumerate}
+		\item By default, XSDK builds the project automatically - this can be turned off from "Project $\rightarrow$ Build Automatically" if preferred. If this is turned off, just press the build icon in the toolbar.
+		\item The .elf file is output to the projects Debug folder, so from the command line, CD to this folder.
+		\item Load the ELF onto the Centurion machine (replace example with the project name):
+			\begin{verbatim}
+			centurion_load_ELF centurion_example.elf
+			\end{verbatim}
+		\item Lots of output will scroll past, as long as the command exits after programming node 63 the upload has been successful.
+	\end{enumerate}
+
+	\section{Monitoring node output}
+	There are a few ways that the output can be observed.
+	
+	The example program can be run on the host from the project's Debug directory: \verb|./centurion_example_Host_PC|. This sends a message to a node, receives a message back and prints out the result, which is one way that output can be observed.
+	
+	Each node has a debug register, which in the examples is memory mapped to the variable DEBUG\_OUT. To see the debug output for all the nodes, run the command \verb|./centurion_example_Host_PC|
+	
+	Finally, the output of one node can be monitored, allowing for \verb|xil_printf()|'s on the node to be observed.
+	For example, to monitor node number 5, run the following three commands:
+		\begin{verbatim}
+		centurion_set_UART 5
+		stty -F /dev/ttyUSB0 speed 921600
+		cat < /dev/ttyUSB0
+		\end{verbatim}
+	
+	As this is annoying to type each time, I created a function in my \verb|.bashrc| file:
+		\begin{verbatim}
+		monitornode(){
+		   centurion_set_UART $1
+		   stty -F /dev/ttyUSB0 speed 921600
+		   cat < /dev/ttyUSB0
+		}
+		\end{verbatim}
+	That way, I can just type this in the terminal, e.g: \verb|monitornode 5|
+	
+	\section{Random useful things}
+	\begin{enumerate}
+		\item The rand() function works as expected on the nodes, except it can't be seeded from a clock. Instead, choose the seed on the host and send it to the nodes
+		\item There is no real time clock, but there is a counter that can be used for timing: \verb|Read_RTC()| returns the current value of this counter.
+		\item Make sure that the initial barrier sync isn't removed and no code is before the initialisation - otherwise it isn't possible to reprogram the nodes.
+		\item Use the Xilinx library on the nodes, e.g \verb|xil_printf| and \verb|Xuint8| / \verb|Xuint16| instead of \verb|printf| and \verb|int|.
+		\item I end up with multiple terminals open, so I added this function to my \verb|.bashrc| file to help:
+			\begin{verbatim}
+			title(){
+			   ORIG=$PS1
+			   TITLE="\e]2;$@\a"
+			   PS1=${ORIG}${TITLE}
+			}
+			\end{verbatim}
+		This allows me to change the title of the terminal, e.g. \verb|title myTerminal|
+	\end{enumerate}
+	
+\end{document}
