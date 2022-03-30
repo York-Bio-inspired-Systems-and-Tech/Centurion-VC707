@@ -1,2 +1,4 @@
+island size:6
 population size:100
 generations:100
+mutation percent:2

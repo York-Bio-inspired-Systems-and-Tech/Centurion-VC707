@@ -21,13 +21,15 @@
 volatile Xuint8 node_id =0;
 
 // Parameters for the algorithm
+Xuint8 island_size;
 Xuint16 population_size;
 Xuint8 generations;
+Xuint8 mutation_rate;
 
 // Receive config data from the host
 void receiveConfig() {
     // Wait to receive a packet from the host with the seed
-	Xuint8 data_size = 5;
+	Xuint8 data_size = 8;
     Xuint16 head;
     Xuint8 data[data_size];
     NoC_Recieve_Packet_Blocking(&head, data, data_size + 1);
@@ -38,14 +40,18 @@ void receiveConfig() {
     srand(seed);
 
     // The next bytes are the config data
-    population_size = data[4];
-    generations = data[5];
+    island_size = data[4];
+    population_size = data[5];
+    generations = data[6];
+    mutation_rate = data[7];
 
     // Output the config
     xil_printf("**Algorithm Config:\n");
     xil_printf("*Random seed:\t\t%d\n", seed);
+    xil_printf("*Island size:\t\t%d\n", island_size);
     xil_printf("*Population size:\t%d\n", population_size);
-    xil_printf("*Generations:\t%d\n", generations);
+    xil_printf("*Generations:\t\t%d\n", generations);
+    xil_printf("*Mutation rate:\t\t%d%%\n", mutation_rate);
 }
 
 int main()
@@ -64,12 +70,6 @@ int main()
     /* wait for PC to tell us to proceed, this line MUST be included to reprogram node SW*/
     Init_Barrier_Sync(0xFE, 0);
 
-	// Only run on node 0
-	if (node_id != 0) {
-		xil_printf("Not running on this node\n");
-		return 0;
-	}
-
     // Receive config data from the host
     receiveConfig();
 
@@ -80,12 +80,26 @@ int main()
     	return 0;
     }
 
+    // Work out which island this node is on
+    Xuint8 column = node_id % 8;
+    Xuint8 row = node_id / 8;
+    // Each island is a square
+    // Island number = island column + island row * islands per row
+    Xuint8 island = column / island_size + (row / island_size) * (8 / island_size);
+
+    // see if this node is a controller for the island
+    Xboolean controller = (column % island_size == 0) && (row % island_size == 0);
+
+    DEBUG_OUT = controller;
+
     // Begin the EA
-    beginEA();
+    if (controller == 1) {
+    	beginAsController();
+    } else {
+    	beginAsAgent();
+    }
 
-    /*DEBUG_OUT = 0;
-
-    // Send the data to the host
+    /*// Send the data to the host
     Xuint8 data[2];
     data[0] = individual;
     data[1] = fitness;

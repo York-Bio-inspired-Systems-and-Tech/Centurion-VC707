@@ -17,8 +17,10 @@
 #include "centurion_lib.h"
 
 // Parameters for the algorithm
+int island_size; // The number of nodes in each island
 int population_size; // The number of individuals on each island
 int generations; // How many generations the algorithm runs for
+int mutation_rate; // The percent chance that each bit will be flipped
 
 // Gets the next config variable from a file
 int readConfigLine(FILE* file, char* line, size_t len) {
@@ -43,11 +45,15 @@ void readConfig() {
 	file = fopen("../config", "r");
 	if (file) {
 		// Read each variable in turn
+		island_size = readConfigLine(file, line, len);
 		population_size = readConfigLine(file, line, len);
 		generations = readConfigLine(file, line, len);
+		mutation_rate = readConfigLine(file, line, len);
 
+		printf("Island size: %d\n", island_size);
 		printf("Populations size: %d\n", population_size);
 		printf("Generations: %d\n", generations);
+		printf("Mutation rate: %d%%\n", mutation_rate);
 
 	} else {
 		printf("Couldn't open config file\n");
@@ -81,12 +87,14 @@ int main(int argc, char *argv[])
 	readConfig();
 
 	// Send config data to each node
-	int data_size = 5;
+	int data_size = 7;
 	Xuint8 config[data_size];
 	// First 3 bytes are for the seed which is set inside the loop
 	// Next bytes are the algorithm parameters
-	config[3] = population_size;
-	config[4] = generations;
+	config[3] = island_size;
+	config[4] = population_size;
+	config[5] = generations;
+	config[6] = mutation_rate;
 
 	int i;
 	for (i = 0; i<64; i++) {

@@ -133,7 +133,7 @@ Xuint32 NoC_Recieve_Packet_Blocking(Xuint16 *header, Xuint8 *data, int max_packe
 	if(header != NULL)
 		*header = NOC_RX_BUFF[0];
 	//print out some info
-	xil_printf("Node packet received at %d, header %X, length %d\n", node_id, NOC_RX_BUFF[0], rx_len);
+	//xil_printf("Node packet received at %d, header %X, length %d\n", node_id, NOC_RX_BUFF[0], rx_len);
 	//copy the data into the buff
 	int i;
 	for(i=0; i < rx_len && i < max_packet_length; i++)
