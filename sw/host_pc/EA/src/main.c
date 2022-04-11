@@ -87,16 +87,18 @@ int main(int argc, char *argv[])
 	readConfig();
 
 	// Send config data to each node
-	int data_size = 7;
+	int data_size = 8;
 	Xuint8 config[data_size];
 	// First 3 bytes are for the seed which is set inside the loop
 	// Next bytes are the algorithm parameters
 	config[3] = island_size;
-	config[4] = population_size;
-	config[5] = generations;
-	config[6] = mutation_rate;
+	config[4] = population_size >> 8; // First byte of populaiton size
+	config[5] = population_size;      // 2nd byte
+	config[6] = generations;
+	config[7] = mutation_rate;
 
 	int i;
+	// Loop through each node
 	for (i = 0; i<64; i++) {
 		// Set the seed for this node
 		config[0] = (seed >> 16) & 0xFF;

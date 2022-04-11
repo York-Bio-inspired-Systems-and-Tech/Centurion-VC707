@@ -25,11 +25,12 @@ Xuint8 island_size;
 Xuint16 population_size;
 Xuint8 generations;
 Xuint8 mutation_rate;
+Xuint16 populationPerIsland;
 
 // Receive config data from the host
 void receiveConfig() {
     // Wait to receive a packet from the host with the seed
-	Xuint8 data_size = 8;
+    Xuint8 data_size = 9;
     Xuint16 head;
     Xuint8 data[data_size];
     NoC_Recieve_Packet_Blocking(&head, data, data_size + 1);
@@ -41,9 +42,9 @@ void receiveConfig() {
 
     // The next bytes are the config data
     island_size = data[4];
-    population_size = data[5];
-    generations = data[6];
-    mutation_rate = data[7];
+    population_size = (data[5] << 8) | data[6]; // Population size is 2 bytes
+    generations = data[7];
+    mutation_rate = data[8];
 
     // Output the config
     xil_printf("**Algorithm Config:\n");
@@ -52,6 +53,10 @@ void receiveConfig() {
     xil_printf("*Population size:\t%d\n", population_size);
     xil_printf("*Generations:\t\t%d\n", generations);
     xil_printf("*Mutation rate:\t\t%d%%\n", mutation_rate);
+
+    // Calculate population per island
+    // Island size refers to side length, e.g. island size 2 has 2x2=4 nodes
+	  populationPerIsland = population_size / (island_size * island_size);
 }
 
 int main()
@@ -60,11 +65,11 @@ int main()
   	NoC_Init();
     /* GPIO to PC, Intel picoblaze and Router picoblaze */
   	DEBUG_OUT = 0;
-	INTEL_OUT = 0x54;
-	ROUTER_OUT = 0x55;
+	  INTEL_OUT = 0x54;
+	  ROUTER_OUT = 0x55;
 
-	xil_printf("*******************\n");
-	xil_printf("Node %d\n", node_id);
+  	xil_printf("*******************\n");
+  	xil_printf("Node %d\n", node_id);
 
     xil_printf("Waiting at barrier sync #1 for host to start\n");
     /* wait for PC to tell us to proceed, this line MUST be included to reprogram node SW*/
@@ -85,7 +90,7 @@ int main()
     Xuint8 row = node_id / 8;
     // Each island is a square
     // Island number = island column + island row * islands per row
-    Xuint8 island = column / island_size + (row / island_size) * (8 / island_size);
+    Xuint8 island = (column / island_size) + (row / island_size) * (8 / island_size);
 
     // see if this node is a controller for the island
     Xboolean controller = (column % island_size == 0) && (row % island_size == 0);

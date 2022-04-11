@@ -17,13 +17,12 @@ Individual population[MAX_POPULATION_SIZE];
 Individual* bestIndividual;
 Individual* worstIndividual;
 Xuint16 totalFitness;
-Xuint16 populationPerIsland;
 Xuint16 islandController; // Node ID of the island controller
 Xuint16 agentNumber; // Which agent this is within an island
 
 // Forward declaration of functions
 void generatePopulation();
-void evaluatePopulation(Xuint8 showDetails);
+void evaluatePopulation(Xboolean showDetails);
 void evaluateIndividual(Individual* individual);
 void generateNewPopulation();
 Individual* selectParent();
@@ -41,9 +40,6 @@ void beginAsController() {
 	// Generate the initial population
 	generatePopulation();
 	xil_printf("Initial population generated\n");
-	
-	// Island size refers to side length, e.g. island size 2 has 2x2=4 nodes
-	populationPerIsland = population_size / (island_size * island_size);
 
 	// Record start time
 	Xuint32 startTime = Read_RTC();
@@ -53,19 +49,18 @@ void beginAsController() {
 		xil_printf("Generation %d\n", generation);
 
 		// Send some individuals to each agent
-		xil_printf("Sending individuals to agents\n");
+		//xil_printf("Sending individuals to agents\n");
 		sendIndividuals();
 
 		// Evaluate the fitness of the population
-		xil_printf("Evaluating individuals\n");
-		evaluatePopulation(0);
+		//xil_printf("Evaluating individuals\n");
+		evaluatePopulation(XFALSE);
 
 		// Receive fitness values from the other agents
-		xil_printf("Receiving fitness values from agents\n");
+		//xil_printf("Receiving fitness values from agents\n");
 		for (Xuint8 i = 0; i < (island_size * island_size) - 1; i++) {
 			receiveFitness();
 		}
-		xil_printf("All fitness values received\n");
 
 		/*for (Xuint8 i = 0; i < population_size; i++) {
 			xil_printf("[%d]%d-%d\n", i, population[i].gene, population[i].fitness);
@@ -87,9 +82,6 @@ void beginAsController() {
 void beginAsAgent() {
 	xil_printf("Running as agent\n");
 
-	// Island size refers to side length, e.g. island size 2 has 2x2=4 nodes
-	populationPerIsland = population_size / (island_size * island_size);
-
 	// Run continuously, processing individuals from the controller
 	while (1) {
 		// Wait for individuals from the controller
@@ -97,7 +89,7 @@ void beginAsAgent() {
 		receiveIndividuals();
 
 		// Evaluate the performance of these individuals
-		evaluatePopulation(1);
+		evaluatePopulation(XTRUE);
 		xil_printf("%d individuals evaluated\n", populationPerIsland);
 
 		// Return the fitness to the controller
@@ -114,7 +106,7 @@ void generatePopulation() {
 }
 
 // Evaluates the fitness of the population
-void evaluatePopulation(Xuint8 showDetails) {
+void evaluatePopulation(Xboolean showDetails) {
 	totalFitness = 0;
 	bestIndividual = NULL;
 	worstIndividual = NULL;
@@ -137,7 +129,7 @@ void evaluatePopulation(Xuint8 showDetails) {
 			worstIndividual = &population[i];
 		}
 
-		// Keep track of total fitness, use for roulette wheel selection and average fitness
+		// Keep track of total fitness, used for roulette wheel selection and average fitness
 		totalFitness += population[i].fitness;
 	}
 }
@@ -271,7 +263,7 @@ void sendIndividuals() {
 			// Work out node to send to based on x and y offsets
 			Xuint8 node = node_id + x + (y * 8);
 
-			// Advance the pointer to the start of the data
+			// Advance the pointer to the start of the data for this island
 			dataStart += populationPerIsland;
 
 			// Send some individuals
@@ -286,7 +278,7 @@ void sendIndividuals() {
 // As an agent, receive individuals from the controller
 void receiveIndividuals() {
 	Xuint8* data = (Xuint8*) population; // Pointer to population, cast to uint pointer
-	Xuint8 length = populationPerIsland * sizeof(Individual);
+	Xuint16 length = populationPerIsland * sizeof(Individual);
 
 	// Receive the packet
 	// The head is the position of the agent within the island
@@ -316,14 +308,12 @@ void sendFitness() {
 
 // As a controller, receive fitness values
 void receiveFitness() {
-	Xuint8 agentNumber;
+	Xuint16 agentNumber;
 	Xuint8 data[populationPerIsland + 1];
 
+	// Receive the data
 	// The head contains which agent this is
 	Xuint16 packet_size = NoC_Recieve_Packet_Blocking(&agentNumber, data, populationPerIsland + 1);
-
-	// The first byte of the data is the node that sent this 
-	Xuint8 fromNode = data[0];
 
 	// The agent only has a subset of the data
 	// So calculate the offset from the agent number

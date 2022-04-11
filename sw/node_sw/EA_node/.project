@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <projectDescription>
-	<name>centurion_example</name>
+	<name>EA_node</name>
 	<comment>Created by SDK v2018.3. standalone_bsp_0 - microblaze_0</comment>
 	<projects>
 		<project>standalone_bsp_0</project>

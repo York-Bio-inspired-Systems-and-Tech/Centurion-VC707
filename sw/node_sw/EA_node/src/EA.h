@@ -26,6 +26,7 @@ extern Xuint8 island_size;
 extern Xuint16 population_size;
 extern Xuint8 generations;
 extern Xuint8 mutation_rate;
+extern Xuint16 populationPerIsland;
 
 extern Individual population[MAX_POPULATION_SIZE];
 

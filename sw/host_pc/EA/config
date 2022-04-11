@@ -1,4 +1,4 @@
-island size:6
+island size:2
 population size:100
-generations:100
+generations:3
 mutation percent:2
