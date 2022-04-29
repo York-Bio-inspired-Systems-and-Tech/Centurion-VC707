@@ -1,4 +1,7 @@
 island size:2
 population size:100
-generations:3
+generations:100
 mutation percent:2
+migration frequency:200
+migration quantity:5
+target fitness:16

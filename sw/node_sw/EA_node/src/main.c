@@ -25,12 +25,15 @@ Xuint8 island_size;
 Xuint16 population_size;
 Xuint8 generations;
 Xuint8 mutation_rate;
+Xuint8 migration_frequency;
+Xuint8 migration_quantity;
+Xuint8 target_fitness;
 Xuint16 populationPerIsland;
 
 // Receive config data from the host
 void receiveConfig() {
     // Wait to receive a packet from the host with the seed
-    Xuint8 data_size = 9;
+    Xuint8 data_size = 12;
     Xuint16 head;
     Xuint8 data[data_size];
     NoC_Recieve_Packet_Blocking(&head, data, data_size + 1);
@@ -45,6 +48,9 @@ void receiveConfig() {
     population_size = (data[5] << 8) | data[6]; // Population size is 2 bytes
     generations = data[7];
     mutation_rate = data[8];
+    migration_frequency = data[9];
+	migration_quantity = data[10];
+	target_fitness = data[11];
 
     // Output the config
     xil_printf("**Algorithm Config:\n");
@@ -53,6 +59,9 @@ void receiveConfig() {
     xil_printf("*Population size:\t%d\n", population_size);
     xil_printf("*Generations:\t\t%d\n", generations);
     xil_printf("*Mutation rate:\t\t%d%%\n", mutation_rate);
+    xil_printf("*Migration Frequency:\t%d\n", migration_frequency);
+    xil_printf("*Migration Quantity:\t%d\n", migration_quantity);
+    xil_printf("*Target Fitness:\t%d\n", target_fitness);
 
     // Calculate population per island
     // Island size refers to side length, e.g. island size 2 has 2x2=4 nodes

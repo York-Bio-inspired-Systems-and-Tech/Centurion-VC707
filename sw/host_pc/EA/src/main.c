@@ -21,6 +21,9 @@ int island_size; // The number of nodes in each island
 int population_size; // The number of individuals on each island
 int generations; // How many generations the algorithm runs for
 int mutation_rate; // The percent chance that each bit will be flipped
+int migration_frequency; // How many generations an island will migrate individuals
+int migration_quantity; // How many individuals are sent during migration
+int target_fitness; // Used as a stopping criteria
 
 // Gets the next config variable from a file
 int readConfigLine(FILE* file, char* line, size_t len) {
@@ -49,11 +52,17 @@ void readConfig() {
 		population_size = readConfigLine(file, line, len);
 		generations = readConfigLine(file, line, len);
 		mutation_rate = readConfigLine(file, line, len);
+		migration_frequency = readConfigLine(file, line, len);
+		migration_quantity = readConfigLine(file, line, len);
+		target_fitness = readConfigLine(file, line, len);
 
-		printf("Island size: %d\n", island_size);
-		printf("Populations size: %d\n", population_size);
-		printf("Generations: %d\n", generations);
-		printf("Mutation rate: %d%%\n", mutation_rate);
+		printf("Island size:\t\t%d\n", island_size);
+		printf("Populations size:\t%d\n", population_size);
+		printf("Generations:\t\t%d\n", generations);
+		printf("Mutation rate:\t\t%d%%\n", mutation_rate);
+		printf("Migration frequency:\t%d\n", migration_frequency);
+		printf("Migration quantity:\t%d\n", migration_quantity);
+		printf("Target fitness:\t\t%d\n", target_fitness);
 
 	} else {
 		printf("Couldn't open config file\n");
@@ -81,13 +90,13 @@ int main(int argc, char *argv[])
 		gettimeofday(&tp, 0);
 		seed = (tp.tv_sec * 1000) + (tp.tv_usec / 1000);
 	}
-	printf("Seed: %d\n", seed);
+	printf("Seed:\t\t\t%d\n", seed);
 
 	// Read the config data
 	readConfig();
 
 	// Send config data to each node
-	int data_size = 8;
+	int data_size = 11;
 	Xuint8 config[data_size];
 	// First 3 bytes are for the seed which is set inside the loop
 	// Next bytes are the algorithm parameters
@@ -96,6 +105,9 @@ int main(int argc, char *argv[])
 	config[5] = population_size;      // 2nd byte
 	config[6] = generations;
 	config[7] = mutation_rate;
+	config[8] = migration_frequency;
+	config[9] = migration_quantity;
+	config[10] = target_fitness;
 
 	int i;
 	// Loop through each node
@@ -114,21 +126,21 @@ int main(int argc, char *argv[])
 
 	printf("Started\n");
 
-	// Receive messages
-	/*Xuint8 data[10];
+	// Wait for a message from the nodes
+	Xuint8 data[10];
 	Xuint16 header;
 	Xuint8 node;
 	Xuint8 packetLength;
-	while (1) {
-		packetLength = Centurion_Read_Blocking(data, 10, &header, &node) - 1;
 
-		printf("Packet from %d, length %d\n", node, packetLength);
+	packetLength = Centurion_Read_Blocking(data, 10, &header, &node) - 1;
 
-		int i;
-		for (i=0; i<packetLength; i++) {
-			printf("[%2d]: %x\n", i, data[i]);
-		}
-	}*/
+	Xuint16 ideal = (data[0] << 8) | data[1];
+
+	// Check the packet header
+	if (header == 1) {
+		// A node is returning an ideal individual
+		printf("Ideal individual found on node %d: %d\n", node, ideal);
+	}
 
     /* close the centurion driver*/
 	close(cent_fd);

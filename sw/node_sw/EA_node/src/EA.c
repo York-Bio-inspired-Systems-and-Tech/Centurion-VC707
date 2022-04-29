@@ -16,13 +16,14 @@
 Individual population[MAX_POPULATION_SIZE];
 Individual* bestIndividual;
 Individual* worstIndividual;
+Individual* idealIndividual;
 Xuint16 totalFitness;
 Xuint16 islandController; // Node ID of the island controller
 Xuint16 agentNumber; // Which agent this is within an island
 
 // Forward declaration of functions
 void generatePopulation();
-void evaluatePopulation(Xboolean showDetails);
+Xboolean evaluatePopulation(Xboolean showDetails);
 void evaluateIndividual(Individual* individual);
 void generateNewPopulation();
 Individual* selectParent();
@@ -31,7 +32,7 @@ Gene mutateGene(Gene gene);
 void sendIndividuals();
 void receiveIndividuals();
 void sendFitness();
-void receiveFitness();
+Xboolean receiveFitness();
 
 // Begin the algorithm as an island controller
 void beginAsController() {
@@ -46,7 +47,7 @@ void beginAsController() {
 
 	// Run for a pre-determined number of generations
 	for (Xuint8 generation = 1; generation <= generations; generation++) {
-		xil_printf("Generation %d\n", generation);
+		//xil_printf("Generation %d\n", generation);
 
 		// Send some individuals to each agent
 		//xil_printf("Sending individuals to agents\n");
@@ -54,12 +55,12 @@ void beginAsController() {
 
 		// Evaluate the fitness of the population
 		//xil_printf("Evaluating individuals\n");
-		evaluatePopulation(XFALSE);
+		Xboolean idealFound = evaluatePopulation(XFALSE);
 
 		// Receive fitness values from the other agents
 		//xil_printf("Receiving fitness values from agents\n");
 		for (Xuint8 i = 0; i < (island_size * island_size) - 1; i++) {
-			receiveFitness();
+			idealFound |= receiveFitness();
 		}
 
 		/*for (Xuint8 i = 0; i < population_size; i++) {
@@ -68,6 +69,22 @@ void beginAsController() {
 
 		xil_printf("Generation %d\tAverage fitness: %d\t", generation, totalFitness / population_size);
 		xil_printf("Best: %u (%d)\tWorst: %u (%d)\n", bestIndividual->gene, bestIndividual->fitness, worstIndividual->gene, worstIndividual->fitness);
+
+		// See if an ideal individual was found
+		if (idealFound) {
+			xil_printf("Ideal individual found\n");
+
+			// Send a message to the host PC
+			Xuint8 data[2];
+			data[0] = idealIndividual->gene >> 8;
+			data[1] = idealIndividual->gene;
+			NoC_Write_Sys_Packet(data, 2, 1, 0);
+
+			xil_printf("Ideal sent\n");
+
+			// No need to continue the loop
+			break;
+		}
 
 		// Generate the population for the next iteration
 		generateNewPopulation();
@@ -89,10 +106,15 @@ void beginAsAgent() {
 		receiveIndividuals();
 
 		// Evaluate the performance of these individuals
-		evaluatePopulation(XTRUE);
+		Xboolean idealFound = evaluatePopulation(XTRUE);
 		xil_printf("%d individuals evaluated\n", populationPerIsland);
 
+		if (idealFound) {
+			xil_printf("Ideal found!!\n");
+		}
+
 		// Return the fitness to the controller
+		// If an ideal individual was found, the controller will handle this
 		sendFitness();
 	}
 }
@@ -106,10 +128,12 @@ void generatePopulation() {
 }
 
 // Evaluates the fitness of the population
-void evaluatePopulation(Xboolean showDetails) {
+// Returns true if the target fitness is found
+Xboolean evaluatePopulation(Xboolean showDetails) {
 	totalFitness = 0;
 	bestIndividual = NULL;
 	worstIndividual = NULL;
+	Xboolean idealFound = XFALSE;
 
 	// Loop through each individual
 	for (Xuint16 i = 0; i < populationPerIsland; i++) {
@@ -117,6 +141,12 @@ void evaluatePopulation(Xboolean showDetails) {
 		
 		if (showDetails) {
 			xil_printf("[%d] %d - %d\n", i, population[i].gene, population[i].fitness);
+		}
+
+		// See if the individual has the target fitness
+		if (population[i].fitness == target_fitness) {
+			idealIndividual = &population[i];
+			idealFound = XTRUE;
 		}
 
 		// Keep track of best individual
@@ -132,6 +162,8 @@ void evaluatePopulation(Xboolean showDetails) {
 		// Keep track of total fitness, used for roulette wheel selection and average fitness
 		totalFitness += population[i].fitness;
 	}
+
+	return idealFound;
 }
 
 // Evaluates the fitness function for an individual
@@ -307,9 +339,11 @@ void sendFitness() {
 }
 
 // As a controller, receive fitness values
-void receiveFitness() {
+// Returns true if an ideal individual was returned
+Xboolean receiveFitness() {
 	Xuint16 agentNumber;
 	Xuint8 data[populationPerIsland + 1];
+	Xboolean idealReceived = XFALSE;
 
 	// Receive the data
 	// The head contains which agent this is
@@ -323,6 +357,13 @@ void receiveFitness() {
 		// Load the fitness into the population array
 		population[offset + i].fitness = data[i+1];
 
+		// See if this is the target fitness
+		if (population[offset + i].fitness == target_fitness) {
+			idealIndividual = &population[offset +i];
+			xil_printf("Ideal received\n");
+			idealReceived = XTRUE;
+		}
+
 		// Keep track of stats
 		totalFitness += data[i+1];
 		if (bestIndividual == NULL || population[offset + i].fitness > bestIndividual->fitness) {
@@ -332,4 +373,6 @@ void receiveFitness() {
 			worstIndividual = &population[offset + i];
 		}
 	}
+
+	return idealReceived;
 }
